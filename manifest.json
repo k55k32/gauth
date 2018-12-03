@@ -1,0 +1,22 @@
+{
+  "name": "Getting Started Example",
+  "version": "1.0",
+  "description": "Build an Extension!",
+  "permissions": ["storage"],
+  "page_action": {
+    "default_popup": "index.html",
+    "default_icon": {
+      "16": "img/icon_16.png",
+      "32": "img/icon_48.png",
+      "48": "img/icon_64.png",
+      "128": "img/icon_128.png"
+    }
+  },
+  "icons": {
+    "16": "img/icon_16.png",
+    "32": "img/icon_48.png",
+    "48": "img/icon_64.png",
+    "128": "img/icon_128.png"
+  },
+  "manifest_version": 2
+}

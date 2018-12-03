@@ -16,20 +16,38 @@
 
 (function(exports) {
     "use strict";
-
+    var inChromeExtensions = window.chrome && chrome.storage
     var StorageService = function() {
         var setObject = function(key, value) {
-            localStorage.setItem(key, JSON.stringify(value));
+            return new Promise(function (resolve) {
+                if (inChromeExtensions) {
+                    chrome.storage.sync.set({[key]: value}, function (data) {
+                        resolve();
+                    });
+                } else {
+                    localStorage.setItem(key, JSON.stringify(value));
+                    resolve();
+                }
+            })
         };
 
         var getObject = function(key) {
-            var value = localStorage.getItem(key);
-            // if(value) return parsed JSON else undefined
-            return value && JSON.parse(value);
+            return new Promise(function (resolve) {
+                if (inChromeExtensions) {
+                    chrome.storage.sync.get([key], function (result) {
+                        resolve(result[key]);
+                    });
+                } else {
+                    var value = localStorage.getItem(key);
+                    // if(value) return parsed JSON else undefined
+                    var data = value && JSON.parse(value);
+                    resolve(data);
+                }
+            })
         };
 
         var isSupported = function() {
-            return typeof (Storage) !== "undefined";
+            return inChromeExtensions || typeof(Storage) !== "undefined";
         };
 
         // exposed functions
@@ -127,12 +145,13 @@
 
             // Check if local storage is supported
             if (storageService.isSupported()) {
-                if (!storageService.getObject('accounts')) {
-                    addAccount('alice@google.com', 'JBSWY3DPEHPK3PXP');
-                }
-
-                updateKeys();
-                setInterval(timerTick, 1000);
+                storageService.getObject('accounts').then(function (accounts) {
+                    if (!accounts) {
+                        addAccount('alice@google.com', 'JBSWY3DPEHPK3PXP');
+                    }
+                    updateKeys();
+                    setInterval(timerTick, 1000);
+                })
             } else {
                 // No support for localStorage
                 $('#updatingIn').text("x");
@@ -160,7 +179,7 @@
 
             var clearAddFields = function() {
                 $('#keyAccount').val('');
-		$('#keySecret').val('');
+		        $('#keySecret').val('');
             };
 
             $('#edit').click(function() { toggleEdit(); });
@@ -171,26 +190,29 @@
             var accountList = $('#accounts');
             // Remove all except the first line
             accountList.find("li:gt(0)").remove();
+            storageService.getObject('accounts').then(function(accounts) {
+                if (accounts) {
+                    $.each(accounts, function (index, account) {
+                        var key = keyUtilities.generate(account.secret);
 
-            $.each(storageService.getObject('accounts'), function (index, account) {
-                var key = keyUtilities.generate(account.secret);
+                        // Construct HTML
+                        var detLink = $('<h3>' + key + '</h3><p>' + account.name + '</p>');
+                        var accElem = $('<li data-icon="false">').append(detLink);
 
-                // Construct HTML
-                var detLink = $('<h3>' + key + '</h3><p>' + account.name + '</p>');
-                var accElem = $('<li data-icon="false">').append(detLink);
+                        if (editingEnabled) {
+                            var delLink = $('<p class="ui-li-aside"><a class="ui-btn-icon-notext ui-icon-delete" href="#"></a></p>');
+                            delLink.click(function () {
+                                deleteAccount(index);
+                            });
+                            accElem.append(delLink);
+                        }
 
-                if(editingEnabled) {
-                    var delLink = $('<p class="ui-li-aside"><a class="ui-btn-icon-notext ui-icon-delete" href="#"></a></p>');
-                    delLink.click(function () {
-                        deleteAccount(index);
+                        // Add HTML element
+                        accountList.append(accElem);
                     });
-                    accElem.append(delLink);
+                    accountList.listview().listview('refresh');
                 }
-
-                // Add HTML element
-                accountList.append(accElem);
-            });
-            accountList.listview().listview('refresh');
+            })
         };
 
         var toggleEdit = function() {
@@ -204,19 +226,22 @@
         };
 
         var exportAccounts = function() {
-            var accounts = JSON.stringify(storageService.getObject('accounts'));
-            var blob = new Blob([accounts], {type: 'text/plain;charset=utf-8'});
+            storageService.getObject('accounts').then(function(accounts) {
+                var blob = new Blob([accounts], {type: 'text/plain;charset=utf-8'});
 
-            saveAs(blob, 'gauth-export.json');
+                saveAs(blob, 'gauth-export.json');
+            })
         };
 
         var deleteAccount = function(index) {
             // Remove object by index
-            var accounts = storageService.getObject('accounts');
-            accounts.splice(index, 1);
-            storageService.setObject('accounts', accounts);
+            storageService.getObject('accounts').then(function (accounts) {
+                accounts.splice(index, 1);
+                storageService.setObject('accounts', accounts).then(() => {
+                    updateKeys();
+                });
 
-            updateKeys();
+            })
         };
 
         var addAccount = function(name, secret) {
@@ -232,15 +257,18 @@
             };
 
             // Persist new object
-            var accounts = storageService.getObject('accounts');
-            if (!accounts) {
-                // if undefined create a new array
-                accounts = [];
-            }
-            accounts.push(account);
-            storageService.setObject('accounts', accounts);
+            storageService.getObject('accounts').then(function(accounts) {
+                console.log(accounts, typeof accounts)
+                if (!accounts) {
+                    // if undefined create a new array
+                    accounts = [];
+                }
+                accounts.push(account);
+                storageService.setObject('accounts', accounts).then(() => {
+                    updateKeys();
+                });
 
-            updateKeys();
+            })
 
             return true;
         };

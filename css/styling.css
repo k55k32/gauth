@@ -58,3 +58,9 @@ footer, div[data-role="footer"] {
   display: inline-block;
   vertical-align: middle;
 }
+
+
+html.ui-mobile, html {
+    width: 320px;
+    height: 568px;
+}
